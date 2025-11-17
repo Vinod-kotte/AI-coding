@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crop Disease Identifier</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { font-family: 'Inter', sans-serif; }
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<div class="w-full max-w-2xl bg-white rounded-xl shadow-lg p-6 md:p-10">
+    <header class="mb-6 text-center">
+        <h1 class="text-3xl font-bold text-gray-800">Crop Disease Identifier</h1>
+        <p class="text-gray-500 mt-2">Upload or capture a leaf image to identify crop disease.</p>
+    </header>
+
+    <div id="app" class="space-y-6">
+
+        <!-- Image Upload -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">1. Upload Leaf Image</label>
+            <label class="group cursor-pointer flex justify-center w-full px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-blue-500 transition-colors">
+                <div id="image-dropzone" class="space-y-1 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 group-hover:text-blue-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                    <div class="flex text-sm text-gray-600">
+                        <span class="relative bg-white rounded-md font-medium text-blue-600 group-hover:text-blue-700">
+                            <span>Upload a file</span>
+                            <input id="image-upload" type="file" class="sr-only" accept="image/png, image/jpeg, image/jpg">
+                        </span>
+                        <p class="pl-1">or drag and drop</p>
+                    </div>
+                    <p class="text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                </div>
+                <img id="image-preview" src="" alt="Image preview" class="hidden h-48 w-auto rounded-md object-contain"/>
+            </label>
+        </div>
+
+        <!-- Camera Capture -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Or Capture Using Camera</label>
+            <div class="flex flex-col items-center space-y-2">
+                <video id="camera-preview" autoplay playsinline class="hidden w-full rounded-lg border border-gray-300"></video>
+                <canvas id="camera-canvas" class="hidden"></canvas>
+                <div class="flex space-x-2">
+                    <button id="start-camera-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">Use Camera</button>
+                    <button id="take-photo-btn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition hidden">Take Photo</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Text Prompt -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700">2. Enter Your Prompt</label>
+            <input type="text" id="prompt" class="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md p-3" value="Identify the disease in this crop leaf.">
+        </div>
+
+        <!-- Submit Button -->
+        <button id="submit-btn" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all">
+            <span id="submit-text">Identify Disease</span>
+            <div id="submit-loader" class="loader hidden"></div>
+        </button>
+
+        <!-- Error -->
+        <div id="error-box" class="hidden p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p id="error-message" class="text-sm font-medium text-red-700"></p>
+        </div>
+
+        <!-- Results -->
+        <div id="results-box" class="hidden space-y-4 pt-4 border-t border-gray-200">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900">Crop Analysis:</h3>
+                <p id="disease-name" class="mt-1 text-gray-700 prose"></p>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900">Cure & Prevention Suggestions:</h3>
+                <div id="cure-suggestions" class="mt-1 text-gray-700 prose prose-sm"></div>
+            </div>
+            <div>
+                <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Sources:</h3>
+                <div id="sources" class="mt-1 text-sm text-gray-500 space-y-1"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+// DOM elements
+const imageUpload = document.getElementById('image-upload');
+const imageDropzone = document.getElementById('image-dropzone');
+const imagePreview = document.getElementById('image-preview');
+const promptInput = document.getElementById('prompt');
+const submitBtn = document.getElementById('submit-btn');
+const submitText = document.getElementById('submit-text');
+const submitLoader = document.getElementById('submit-loader');
+const errorBox = document.getElementById('error-box');
+const errorMessage = document.getElementById('error-message');
+const resultsBox = document.getElementById('results-box');
+const diseaseName = document.getElementById('disease-name');
+const cureSuggestions = document.getElementById('cure-suggestions');
+const sourcesEl = document.getElementById('sources');
+
+// Camera
+const startCameraBtn = document.getElementById('start-camera-btn');
+const takePhotoBtn = document.getElementById('take-photo-btn');
+const cameraPreview = document.getElementById('camera-preview');
+const cameraCanvas = document.getElementById('camera-canvas');
+
+let cameraStream = null;
+let globalImageBase64 = null;
+let globalMimeType = null;
+
+// API
+const apiKey = "AIzaSyDZ13T-71uY5R5VlPZYbHGIkeR_CvoBelg";
+const genAIApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+// Event listeners
+imageUpload.addEventListener('change', handleImageChange);
+submitBtn.addEventListener('click', handleSubmit);
+startCameraBtn.addEventListener('click', startCamera);
+takePhotoBtn.addEventListener('click', takePhoto);
+
+// Image upload
+function handleImageChange(event){
+    const file = event.target.files[0];
+    if(!file){ resetImage(); return; }
+    if(!file.type.startsWith('image/')){ showError('Please upload a valid image.'); return; }
+    globalMimeType = file.type;
+    const reader = new FileReader();
+    reader.onload = e=>{
+        const dataUrl = e.target.result;
+        imagePreview.src = dataUrl;
+        imagePreview.classList.remove('hidden');
+        imageDropzone.classList.add('hidden');
+        globalImageBase64 = dataUrl.split(',')[1];
+        hideError();
+    };
+    reader.readAsDataURL(file);
+}
+function resetImage(){ globalImageBase64=null; globalMimeType=null; imagePreview.classList.add('hidden'); imageDropzone.classList.remove('hidden'); }
+
+// Camera functions
+async function startCamera(){
+    try{
+        cameraStream = await navigator.mediaDevices.getUserMedia({video:true});
+        cameraPreview.srcObject = cameraStream;
+        cameraPreview.classList.remove('hidden');
+        takePhotoBtn.classList.remove('hidden');
+        startCameraBtn.classList.add('hidden');
+        hideError();
+    }catch(err){ showError('Cannot access camera: '+err.message); }
+}
+function takePhoto(){
+    const ctx = cameraCanvas.getContext('2d');
+    cameraCanvas.width = cameraPreview.videoWidth;
+    cameraCanvas.height = cameraPreview.videoHeight;
+    ctx.drawImage(cameraPreview,0,0,cameraCanvas.width,cameraCanvas.height);
+    const dataUrl = cameraCanvas.toDataURL('image/jpeg');
+    imagePreview.src = dataUrl;
+    imagePreview.classList.remove('hidden');
+    imageDropzone.classList.add('hidden');
+    globalImageBase64 = dataUrl.split(',')[1];
+    globalMimeType = 'image/jpeg';
+    cameraStream.getTracks().forEach(t=>t.stop());
+    cameraPreview.classList.add('hidden');
+    takePhotoBtn.classList.add('hidden');
+    startCameraBtn.classList.remove('hidden');
+}
+
+// Validate crop image
+async function validateCropImage(base64, mimeType){
+    const prompt = `You are a plant expert. Check if this image is of a crop leaf. Answer only "VALID" or "INVALID".`;
+    const payload = { contents:[{role:"user", parts:[{text:prompt},{inlineData:{mimeType,data:base64}}]}], generationConfig:{temperature:0} };
+    const data = await fetchWithBackoff(genAIApiUrl,payload);
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toUpperCase();
+    return text==='VALID';
+}
+
+// Submit handler
+async function handleSubmit(){
+    const promptText = promptInput.value;
+    if(!globalImageBase64) return showError('Please upload or capture an image.');
+    if(!promptText) return showError('Please enter a prompt.');
+    setLoadingState(true); hideError(); resultsBox.classList.add('hidden');
+    try{
+        const isCrop = await validateCropImage(globalImageBase64, globalMimeType);
+        if(!isCrop){ showError('Please upload a valid crop leaf image.'); setLoadingState(false); return; }
+
+        const idResp = await identifyDisease(`You are a plant pathologist. Analyze this image: "${promptText}"`, globalImageBase64, globalMimeType);
+        diseaseName.textContent = idResp.text;
+        resultsBox.classList.remove('hidden');
+
+        await getCureInfo(`A plant analysis returned: "${idResp.text}". Provide 2–3 practical cure & prevention tips in bullet points suitable for a home gardener.`);
+    }catch(err){ console.error(err); showError(err.message || 'Unknown error'); }
+    finally{ setLoadingState(false); }
+}
+
+// Identify disease
+async function identifyDisease(prompt, base64, mimeType){
+    const payload = { contents:[{role:"user", parts:[{text:prompt},{inlineData:{mimeType,data:base64}}]}], generationConfig:{temperature:0.2,topP:0.8,topK:10} };
+    const data = await fetchWithBackoff(genAIApiUrl,payload);
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if(!text) throw new Error('No valid identification response from AI.');
+    return { text };
+}
+
+// Get cure info
+async function getCureInfo(prompt){
+    const payload = { contents:[{parts:[{text:prompt}]}], tools:[{"google_search":{}}] };
+    const data = await fetchWithBackoff(genAIApiUrl,payload);
+    const candidate = data.candidates?.[0];
+    const text = candidate?.content?.parts?.[0]?.text;
+    cureSuggestions.innerHTML = text ? text.replace(/\n/g,'<br>') : 'Could not find suggestions.';
+    sourcesEl.innerHTML='';
+    const sources = candidate?.groundingMetadata?.groundingAttributions?.map(a=>a.web).filter(s=>s&&s.uri&&s.title);
+    if(sources?.length) sources.forEach(s=>{
+        const a=document.createElement('a'); a.href=s.uri; a.textContent=s.title; a.target='_blank'; a.rel='noopener noreferrer';
+        a.className='block truncate text-blue-600 hover:underline'; sourcesEl.appendChild(a);
+    }); else sourcesEl.textContent='No web sources cited.';
+}
+
+// UI helpers
+function setLoadingState(isLoading){ submitText.classList.toggle('hidden',isLoading); submitLoader.classList.toggle('hidden',!isLoading); submitBtn.disabled=isLoading; }
+function showError(msg){ errorMessage.textContent=msg; errorBox.classList.remove('hidden'); }
+function hideError(){ errorBox.classList.add('hidden'); errorMessage.textContent=''; }
+
+// Fetch with backoff
+async function fetchWithBackoff(url,payload,retries=3,delay=1000){
+    for(let i=0;i<retries;i++){
+        try{
+            const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+            if(!res.ok){ const body=await res.text(); throw new Error(`HTTP ${res.status}: ${body}`); }
+            const data = await res.json();
+            if(data.error) throw new Error(data.error.message);
+            if(!data.candidates?.length) throw new Error('No content generated.');
+            return data;
+        }catch(err){ console.warn(`Attempt ${i+1} failed: ${err.message}`); if(i===retries-1) throw new Error(`All API attempts failed: ${err.message}`); await new Promise(r=>setTimeout(r,delay*Math.pow(2,i))); }
+    }
+}
+</script>
+</body>
+</html>
